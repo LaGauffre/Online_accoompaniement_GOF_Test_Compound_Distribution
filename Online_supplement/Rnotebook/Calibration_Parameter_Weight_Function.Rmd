@@ -1,0 +1,180 @@
+---
+title: "Monte Carlo study to calibrate the parameter in the weight function"
+author: "Pierre-O Goffard"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(ggplot2)
+library(FTCD)
+library(rmarkdown)
+library(latex2exp)
+library(knitr)
+```
+The goal of this notebook is determine an acceptable value for the parameter in the exponential weight function used with the Laplace transform based goodness-of-fit test. The study is conducted when testing for a compound Poisson-exponential model under $H_0$ to fit the aggregated claim amounts that will actually come from a compound Poisson-Gamma model. The level and the power of the test the Laplace transform based GOF test are computed for both the $\text{SE}_n^{2}$ and $\text{DE}_n(t)$ distance for values of $\beta$ ranging in the set $\{10^{-13},10^{-12}, \ldots, 10^3\}$. The evaluation is performed using a parametric bootstrap routine combined to the Warp speed method with $10,000$ samples generated. The following chunk allows us to collect the simulation data and should be run using some distant computing server. 
+```{r, eval = FALSE, include = FALSE}
+# inference_methods <- c("MME", "partial-MME")
+# methods <- c("LT_L2", "LT_ODE")
+# rvec <- c(0.5, 0.75, 1, 2, 4)
+# MC <- 10000
+# beta_vec <- 10^seq(-13 , 3, 1)
+# res <- NULL
+# 
+# for(method in methods){
+#   print(method)
+#   for(r in rvec){
+#     print(r)
+#     for(inference_method in inference_methods){
+#       print(inference_method)
+#       eval(
+#         parse(
+#           text = paste0("power_",
+#                         r,
+#                         "_",
+#                         method,
+#                         " <- data.frame(
+#                         r = rep(",r,", length(beta_vec)),
+#                         LT_gof_method = rep('", method,"', length(beta_vec)),
+#                         Inference_method = rep('", inference_method,"', length(beta_vec)),
+#                         beta = beta_vec,
+#                         power = sapply(beta_vec, function(beta) p_value(100, 'pois', 'gamma',c(0, 1, ",
+#                         r,
+#                         ", 1), 'pois', 'exp', MC,'",
+#                         inference_method,
+#                         "', '",
+#                         method,
+#                         "', beta)))")
+#         )
+#       )
+#       res <- rbind(res, eval(parse(text = paste0("power_",r,"_",method))))
+#     }
+# 
+#   }
+# }
+# 
+# write_csv(res, path = "~/Goffard-Jammalamadaka-Meintanis/Simulation_DATA_Export/Calibration_Exp_Data.txt")
+
+#Calibration <- read.csv("~/Goffard-Jammalamadaka-Meintanis/Simulation_DATA_Export/Calibration_Exp_Data.txt")
+```
+
+We start by studying the level associated to the two tests and the two inference methods.
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+#PC
+Calibration_data <- read.csv("C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Simulation_DATA/Calibration_Exp_Data.txt")
+#Mac
+#Calibration_data <- read.csv("~/Dropbox/Goffard-Jammalamadaka-Meintanis/Simulation_DATA/Calibration_Exp_Data.txt")
+font_size_graph <- 12
+level_plot <- ggplot(data = Calibration_data %>% filter(r == "1") %>% mutate(var_qual = paste(LT_gof_method,"&",Inference_method)), mapping = aes(x = log(beta) / log(10), y = power, linetype = var_qual)) + geom_point(aes(colour = var_qual)) + geom_line(aes(colour = var_qual)) + labs(linetype = "GOF and inference method", colour = "GOF and inference method") +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "bottom")
+level_plot
+
+# The plot in the paper is obtained by running the following code
+# font_size_graph <- 16
+# level_plot <- ggplot(data = Calibration_data %>% filter(r == "1") %>% mutate(var_qual = paste(LT_gof_method,"&",Inference_method)), mapping = aes(x = log(beta) / log(10), y = power, linetype = var_qual)) + geom_point() + geom_line() + theme_bw() + 
+#   scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash')) + xlab(TeX('$\\ln(\\beta)/\\ln(10)$')) + ylab('probability of rejection') +
+#   theme(axis.title = element_text(size = font_size_graph),
+#         axis.text = element_text(size = font_size_graph),
+#         legend.text = element_text(size = font_size_graph),
+#         legend.title = element_text(size = font_size_graph),
+#         legend.position = "none")
+# level_plot
+#ggsave("C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Pictures/level_plot.pdf", plot = level_plot)
+```
+
+At a $95\%$ confidence level the p-value of test is expected to be $5\%$ when the input samples come from a Poisson-exponential distribution. This true for both of he procedure when $\beta$ is between $10^{-4}$ and $1$. We may disregard the other values of $\beta$ to study the power of the tests
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+library(gridExtra)
+power_0.5 <- ggplot(data = Calibration_data %>% filter(r == "0.5" & beta > 10^(-7) &  beta <= 100) %>% mutate(var_qual = paste(LT_gof_method,"&",Inference_method)), mapping = aes(x = log(beta) / log(10), y = power, linetype = var_qual)) + geom_point(aes(colour = var_qual)) + geom_line(aes(colour = var_qual)) + ggtitle('r = 1/2') + labs(linetype = "GOF and inference method", colour = "GOF and inference method") + theme_bw() +
+  theme(axis.title = element_text(size = 8),
+        axis.text = element_text(size = 8),
+        title = element_text(size = 8),
+        legend.text = element_text(size = 7),
+        legend.title = element_text(size = 7),
+        legend.position="left")
+
+power_0.75 <- ggplot(data = Calibration_data %>% filter(r == "0.75"& beta > 10^(-7)&  beta <= 100) %>% mutate(var_qual = paste(LT_gof_method,"&",Inference_method)), mapping = aes(x = log(beta) / log(10), y = power, linetype = var_qual)) + geom_point(aes(colour = var_qual)) + geom_line(aes(colour = var_qual)) + ggtitle('r = 3/4') + labs(linetype = "", colour = "") + theme_bw() +
+  theme(axis.title = element_text(size = 8),
+        axis.text = element_text(size = 8),
+        title = element_text(size = 8),
+        legend.position="none")
+  
+power_2 <- ggplot(data = Calibration_data %>% filter(r == "2"& beta > 10^(-7)&  beta <= 100) %>% mutate(var_qual = paste(LT_gof_method,"&",Inference_method)), mapping = aes(x = log(beta) / log(10), y = power, linetype = var_qual)) + geom_point(aes(colour = var_qual)) + geom_line(aes(colour = var_qual)) + ggtitle('r = 2') + labs(linetype = "", colour = "") + theme_bw() +
+  theme(axis.title = element_text(size = 8),
+        axis.text = element_text(size = 8),
+        title = element_text(size = 8),
+        legend.position="none")
+
+power_4 <- ggplot(data = Calibration_data %>% filter(r == "4" & beta > 10^(-7)&  beta <= 100) %>% mutate(var_qual = paste(LT_gof_method,"&",Inference_method)), mapping = aes(x = log(beta) / log(10), y = power, linetype = var_qual)) + geom_point(aes(colour = var_qual)) + geom_line(aes(colour = var_qual)) + ggtitle('r = 4') + labs(linetype = "", colour = "") + theme_bw() +
+  theme(axis.title = element_text(size = 8),
+        axis.text = element_text(size = 8),
+        title = element_text(size = 8),
+        legend.position="none")
+
+power_plot <- grid.arrange(power_0.5, power_0.75,power_2, power_4, ncol = 2, nrow = 2)
+power_plot
+```
+
+
+```{r, echo = FALSE, message = FALSE, include = FALSE, eval = FALSE}
+# The plots in the paper are obtained via the following code
+font_size_graph <- 16
+power_0.5 <- ggplot(data = Calibration_data %>% filter(r == "0.5") %>% mutate(var_qual = paste(LT_gof_method,"&",Inference_method)), mapping = aes(x = log(beta) / log(10), y = power, linetype = var_qual)) + geom_point() + geom_line() + theme_bw() + ylab('probability of rejection') + xlab(TeX('$\\ln(\\beta)/\\ln(10)$')) +
+  scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        title = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position="none")
+power_0.5
+
+ggsave("C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Pictures/power_05.pdf", plot = power_0.5)
+
+power_0.75 <- ggplot(data = Calibration_data %>% filter(r == "0.75" ) %>% mutate(var_qual = paste(LT_gof_method,"&",Inference_method)), mapping = aes(x = log(beta) / log(10), y = power, linetype = var_qual)) + geom_point() + geom_line() + theme_bw() + ylab('probability of rejection') + xlab(TeX('$\\ln(\\beta)/\\ln(10)$')) +
+  scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        title = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position="none")
+power_0.75
+
+ggsave("C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Pictures/power_075.pdf", plot = power_0.75)
+
+power_2 <- ggplot(data = Calibration_data %>% filter(r == "2") %>% mutate(var_qual = paste(LT_gof_method,"&",Inference_method)), mapping = aes(x = log(beta) / log(10), y = power, linetype = var_qual)) + geom_point() + geom_line() + theme_bw() + ylab('probability of rejection') + xlab(TeX('$\\ln(\\beta)/\\ln(10)$')) +
+  scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        title = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position="none")
+power_2
+
+ggsave("C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Pictures/power_2.pdf", plot = power_2)
+
+power_4 <- ggplot(data = Calibration_data %>% filter(r == "4" ) %>% mutate(var_qual = paste(LT_gof_method,"&",Inference_method)), mapping = aes(x = log(beta) / log(10), y = power, linetype = var_qual)) + geom_point() + geom_line() + theme_bw() + ylab('probability of rejection') + xlab(TeX('$\\ln(\\beta)/\\ln(10)$')) +
+  scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        title = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position="none")
+power_4
+
+ggsave("C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Pictures/power_4.pdf", plot = power_4)
+```
+
+
+

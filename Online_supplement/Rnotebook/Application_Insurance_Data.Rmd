@@ -1,0 +1,572 @@
+---
+title: "Application of the GOF procedures for compound distribution on real insurance data set"
+output: html_notebook
+author: Pierre-O Goffard
+---
+The inference and goodness-of-fit techniques developped in the FTCD package
+```{r, echo = FALSE, message = FALSE, include = FALSE, warning = FALSE}
+library(FTCD)
+library(tidyverse)
+library(fitdistrplus)
+library(moments)
+library(xtable)
+library(e1071)
+library(tea)
+library(expint)
+library(actuar)
+library(ggplot2)
+options(warn=-1)
+export_path <- "C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Pictures/"
+```
+are illustrated on an actuarial data set `itamtpltcost` accessible from the package `CASdatasets`.
+```{r, message = FALSE, echo = FALSE, warning = FALSE}
+library(sp)
+library(xts)
+#install.packages("CASdatasets", repos = "http://dutangc.free.fr/pub/RRepos/", type="source")
+library(CASdatasets)
+data(itamtplcost)
+```
+This dataset contains losses (in excess of $500,000$ euros) of an italian third-party liability motor insurance portfolio since $1997$. It comprises two variables  `Date` and `UltimateCost`, and $457$ observations. Hereafeter is presented an excerpt of the data.
+```{r, echo = FALSE}
+itamtplcost
+```
+The data is available at the individual claim level, we can therefore process the data to get the aggregated version of it based on the date information. The original data is analysed so as to determine what might be a good distribution for the claim 
+sizes. The inference and GOF procedures are then applied to the aggregate data, we can then  appreciate the consistency of the results with that of the first analysis.
+
+The quantile-quantile plot of the individual claims against the exponential distribution
+```{r, message = FALSE, echo = FALSE}
+font_size_graph <- 16
+# QUantile quantile plot checking for an exponential or Pareto distributon
+italian_loss <- itamtplcost$UltimateCost
+itamtplcost_quantile <- data.frame(
+  exp_quantile = sapply(seq(0.0001,1,0.0001), function(p) -log(1-p)),
+  loss_quantile = sapply(seq(0.0001,1,0.0001),function(p)  quantile(italian_loss, p)),
+  log_loss_quantile = sapply(seq(0.0001,1,0.0001),function(p)  quantile(log(italian_loss) , p))
+)
+
+# Quantil-quantile plot exponential distribution
+exp_qqplot <- ggplot2::ggplot(data = itamtplcost_quantile) + geom_point(mapping = aes(x = exp_quantile, y = loss_quantile)) + xlab('Standard exponential quantiles') + ylab('Empirical Quantiles') + theme_bw() +
+  theme(axis.title.x = element_text(size = font_size_graph),
+        axis.title.y = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph)
+        )
+exp_qqplot
+```
+exhibits a linear trend for the lower level quantiles, the fit does not look adequate in the right tail of the data.
+```{r, echo = FALSE, message = FALSE, eval = FALSE}
+ggsave(paste0(export_path, "QQPlot_exponential.pdf"), exp_qqplot)
+```
+The quantile-quantile plot of the log losses against the exponential distribution shows a linear trend for the upper level quantiles
+```{r, echo = FALSE}
+# Quantil-quantile plot exponential distribution
+Pareto_qqplot <- ggplot2::ggplot(data = itamtplcost_quantile) + geom_point(mapping = aes(x = exp_quantile, y = log_loss_quantile)) + xlab('Standard exponential quantiles') + ylab('Empirical Quantiles') + theme_bw() + 
+  theme(axis.title.x = element_text(size = font_size_graph),
+        axis.title.y = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph)
+        )
+Pareto_qqplot
+```
+which means that a splicing model combining a light tailed distribution for the belly and a heavier tailed distribution for the right tail of the data might be a good idea. 
+```{r, echo = FALSE, message = FALSE, eval = FALSE}
+ggsave(paste0(export_path, "QQPlot_Pareto.pdf"), Pareto_qqplot)
+```
+This also implies a probable rejection of the compound models to be tested. The analysis is then conducted over the whole data set and on a subset made of the smaller claims. The claims that are lower than a threshold are considered to be small. The cut-off point is the upper order statistic that minimizes the asymptotic mean squared error of the Hill estimator. The mean excess plot and the Hill plot of the data are given below 
+```{r, echo = FALSE, message = FALSE}
+n <- length(italian_loss)
+italian_loss_sorted <- sort(italian_loss, decreasing = FALSE)
+#Definition of a threshold based on the tail index estimator 
+
+Hill_amse_italian <- dAMSE(italian_loss_sorted)
+# Hill_amse_italian <- dAMSE(italian_loss_sorted)
+mean_excess_data <- data.frame(order_stat = italian_loss_sorted[-n],
+           excess_mean = sapply(italian_loss_sorted[-n], 
+            function(t) mean(italian_loss[italian_loss>t]) - t) 
+           )
+
+mean_exess_plot <- ggplot2::ggplot(data = mean_excess_data) + geom_point(mapping = aes(x = order_stat, y = excess_mean)) + xlab('Order statistic') + ylab('Mean over threshold') + geom_vline(xintercept = Hill_amse_italian$threshold) +
+   scale_y_continuous(labels=function(n){format(n, scientific = TRUE)}) + theme_bw() + theme(axis.title.x = element_text(size = font_size_graph),
+        axis.title.y = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph)
+        )
+  
+mean_exess_plot
+
+Hill_data <- data.frame(index_order_stat = 1:(n - 1),
+                       Hill_est = sapply(1:(n - 1), function(k) mean(sapply(1:k, function(j) 
+  j * log(italian_loss_sorted[n - j + 1] / italian_loss_sorted[n - j]))))
+)
+Hill_plot <- ggplot2::ggplot(data = Hill_data) + geom_point(mapping = aes(x = index_order_stat, y = Hill_est)) + xlab('Index order statistic') + ylab('Tail index') + geom_vline(xintercept = Hill_amse_italian$k0) + theme_bw() +  theme(axis.title.x = element_text(size = font_size_graph),
+        axis.title.y = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph)
+        )
+Hill_plot
+```
+```{r, echo = FALSE, message = FALSE, eval = FALSE}
+ggsave(paste0(export_path, "mean_exess_plot.pdf"), mean_exess_plot)
+ggsave(paste0(export_path, "Hill_plot.pdf"), Hill_plot)
+```
+The horizontal line provide the cut-of point, the threshold is given in mean excess plot while the index of the corresponding order statistics may be viewed on the Hill estimator plot. Some descriptive statistics of the data are provided thereafter
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+#Summary statistics, standard deviation and kutorsis in the datasets, spike graph
+U <- sort(itamtplcost$UltimateCost)
+## List of descriptive statistics
+list_stat <- c('No of observations', 'E(U)', 'St.Dev(U)', 'Skewness(U)', 'Kurtosis(U)', 'Minimum', 'Maximum', 'Q1', 'median', 'Q3')
+## Overall statisitics
+stat_U <- c(length(U), mean(U), sd(U),skewness(U), kurtosis(U), min(U), max(U), quantile(U, 0.25),quantile(U, 0.5), 
+  quantile(U, 0.75))
+## Statistics over the small claims
+itamtplcost_small <- itamtplcost[itamtplcost$UltimateCost < Hill_amse_italian$threshold, ]
+U <- itamtplcost_small$UltimateCost 
+stat_U_small <- c(length(U), mean(U), sd(U),skewness(U), kurtosis(U), min(U), max(U), quantile(U, 0.25),quantile(U, 0.5), 
+  quantile(U, 0.75))
+stat_desc <- data.frame(Statitistics = list_stat, overall = stat_U, small_claims = stat_U_small)
+stat_desc
+```
+We note the swift decrease of variance when considering the small claims solely. The quartiles are stable while the mean in the small claims subset decreases to get closer to the median. Table \ref{tab:EstimatedParameters} reports the method of moments estimators of the parameters of the exponential and gamma distribution.
+```{r, echo = FALSE, eval = FALSE}
+print(xtable(stat_desc), 
+      include.rownames = FALSE, include.colnames = TRUE)
+```
+We will first assess the adequacy of the claim sizes data to the claim sizes distribution under $H_0$ including 
+
+- exponential
+- gamma
+- inverse Gaussian
+
+```{r, echo = FALSE, message = FALSE}
+library(fitdistrplus)
+small_italian_loss <- itamtplcost_small$UltimateCost 
+### Large claims
+fit_exp_italian <- fitdist(italian_loss, dexp, method=c("mme"))
+scale_exp_italian <- 1 / fit_exp_italian$estimate
+fit_gamma_italian <- fitdist(italian_loss, dgamma, method=c("mme"))
+shape_gamma_italian <- fit_gamma_italian$estimate[1]
+scale_gamma_italian <- 1/fit_gamma_italian$estimate[2]
+fit_ingauss_italian <- c(mean(italian_loss), var(italian_loss)/mean(italian_loss)^3)
+
+### Small claims
+fit_exp_italian_small <- fitdist(small_italian_loss, dexp, method=c("mme"))
+scale_exp_italian_small <- 1 / fit_exp_italian_small$estimate
+fit_gamma_italian_small <- fitdist(small_italian_loss, dgamma, method=c("mme"))
+shape_gamma_italian_small <- fit_gamma_italian_small$estimate[1]
+scale_gamma_italian_small <- 1/fit_gamma_italian_small$estimate[2]
+fit_ingauss_italian_small <- c(mean(small_italian_loss), var(small_italian_loss)/mean(small_italian_loss)^3)
+### Output
+Claim_sizes_parameter_estimate <- data.frame(
+  parameters = c('scale.exp', 'shape.gamma', 'scale.gamma', "mean.invgauss", "dispersion.invgauss"),
+  estimates = c(scale_exp_italian, shape_gamma_italian, scale_gamma_italian, fit_ingauss_italian[1], fit_ingauss_italian[2]),
+  estimates_small = c(scale_exp_italian_small, shape_gamma_italian_small, scale_gamma_italian_small,fit_ingauss_italian_small[1], fit_ingauss_italian_small[2]))
+Claim_sizes_parameter_estimate
+```
+```{r, echo = FALSE, message = FALSE, eval = FALSE}
+print(xtable(Claim_sizes_parameter_estimate), 
+      include.rownames = FALSE, include.colnames = TRUE)
+```
+
+We plot the histogram of the data and superimpose the density functions of the exponential, gamma and inverse Gaussian distribution on top of it. 
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+# Histogram over all the claims
+exp_pdf <- function(x) exp(-x / scale_exp_italian) / scale_exp_italian
+gamma_pdf <- function(x) dgamma(x, shape = shape_gamma_italian ,scale = scale_gamma_italian)
+invgauss_pdf <- function(x) actuar::dinvgauss(x, mean = fit_ingauss_italian[1], dispersion = fit_ingauss_italian[2])
+italian_loss_data <- data.frame(loss = italian_loss)
+hist_italian_loss <- ggplot2::ggplot(data = italian_loss_data) + geom_histogram(mapping = aes(x = loss, y = ..density..), bg = 'lightgrey') + xlab('Density') + ylab('Claim amounts') + stat_function(fun = exp_pdf, linetype="solid") +
+  stat_function(fun = gamma_pdf, linetype="dotted") +
+  stat_function(fun = invgauss_pdf, linetype="dashed") +
+  theme_bw() +
+  theme(axis.title.x = element_text(size = font_size_graph),
+        axis.title.y = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph)
+        )
+hist_italian_loss
+                                                           
+# Histogram for the small claims
+exp_pdf <- function(x) exp(-x / scale_exp_italian_small) / scale_exp_italian_small
+gamma_pdf <- function(x) dgamma(x, shape = shape_gamma_italian_small ,scale = scale_gamma_italian_small)
+invgauss_pdf <- function(x) actuar::dinvgauss(x, mean = fit_ingauss_italian_small[1], dispersion = fit_ingauss_italian_small[2])
+small_italian_loss_data <- data.frame(loss = small_italian_loss)
+hist_small_italian_loss <- ggplot2::ggplot(data = small_italian_loss_data) + geom_histogram(mapping = aes(x = loss, y = ..density..), bg = 'lightgrey') + xlab('Density') + ylab('Claim amounts') + stat_function(fun = exp_pdf, linetype="solid") +
+  stat_function(fun = gamma_pdf, linetype="dotted") +
+  stat_function(fun = invgauss_pdf, linetype="dashed") +
+  theme_bw() +
+  theme(axis.title.x = element_text(size = font_size_graph),
+        axis.title.y = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph)
+        )
+hist_small_italian_loss
+```
+```{r, echo = FALSE, message = FALSE, eval = FALSE}
+ggsave(paste0(export_path, "hist_overall.pdf"), hist_italian_loss)
+ggsave(paste0(export_path, "hist_small_claims.pdf"), hist_small_italian_loss)
+```
+Now we assess the fit using goodneess of fit test and Akaike criteria on all the claims
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+### Function to calculate KS distance, Cvm criterium and AIC for inverse Gaussian
+#' fit_gof_IG function to fit and assess the fit of the Inverse Gaussian
+#'
+#' @param X_data sample of claim sizes 
+#'
+#' @return The parameters estimated via MME, the AIC, the KS ditance and the CvM distance
+#' @export
+#'
+#' @examples
+fit_gof_IG <- function(X_data){
+  
+  n <- length(X_data)
+  params <- list(mean(X_data), var(X_data)/mean(X_data)^3)
+  names(params) <- c("mean", "dispersion")
+  log_L <- log(dinvgauss(X_data, mean = params$mean, dispersion = params$dispersion))
+  AIC <- 2 * length(params) - 2 * sum(log_L * is.finite(log_L), na.rm = T)
+  cdf_OS <- pinvgauss(sort(X_data), mean = params$mean, dispersion = params$dispersion)
+  CvM <- 1 / 12 / n + sum((cdf_OS - (2 * (1:n) - 1) / 2 / n)^2)
+  KS <-max(c(max((1:n) /n - cdf_OS), max(cdf_OS - (1:n - 1) / n)))
+  res <- list(params, AIC, CvM, KS)
+  names(res) <-  list('params', 'AIC', 'CvM', 'KS')
+  return(res)
+}
+## AIC and Goodness of fit test
+### Large claims
+gof <- gofstat(list(fit_exp_italian, fit_gamma_italian), discrete = FALSE, 
+               fitnames = c("exponential","gamma"))
+gof_IG <- fit_gof_IG(italian_loss)
+n <- length(italian_loss)
+#### Parametric bootstrap
+n_loop <- 100
+gof_boot <- matrix(1, n_loop, 6)
+for(k in 1:n_loop){
+  exp_boot <- rexp(n, rate = 1 / scale_exp_italian )
+  gamma_boot <- rgamma(n, shape = shape_gamma_italian, scale = scale_gamma_italian)
+  invgauss_boot <- rinvgauss(n, mean = gof_IG$params$mean, dispersion = gof_IG$params$dispersion)
+  fit_exp_boot <- fitdist(exp_boot, dexp, method = c("mme"))
+  fit_gamma_boot <- fitdist(gamma_boot, dgamma, method = c("mme"))
+  gof_invgauss_boot <- fit_gof_IG(invgauss_boot)
+  gof_boot_exp <- gofstat(fit_exp_boot, discrete = FALSE, fitnames = c("exponential"))
+  gof_boot_gamma <- gofstat(fit_gamma_boot, discrete = FALSE, fitnames = c("gamma"))
+  gof_boot[k,] <-c(gof_boot_exp$ks, gof_boot_exp$cvm, gof_boot_gamma$ks , gof_boot_gamma$cvm, gof_invgauss_boot$KS, gof_invgauss_boot$CvM) 
+}
+gof_italian <- data.frame(model = c('exponential','gamma', 'invgauss'),
+                         AIC = c(gof$aic, gof_IG$AIC),
+                         ks = c(gof$ks, gof_IG$KS), 
+                         ks_critical = c(quantile(gof_boot[,1],0.95), quantile(gof_boot[,3],0.95), quantile(gof_boot[,5],0.95)),
+                         cvm = c(gof$cvm, gof_IG$CvM), 
+                         cvm_critical = c(quantile(gof_boot[,2],0.95), quantile(gof_boot[,4],0.95), quantile(gof_boot[,6],0.95))  
+) 
+row.names(gof_italian) <- NULL
+gof_italian
+
+# print(xtable(gof_italian), 
+#       include.rownames = FALSE, include.colnames = TRUE)
+```
+and then on the small claims
+```{r, echo = FALSE, message = FALSE, warning=FALSE}
+## AIC and Goodness of fit test
+### Small claims
+gof_small <- gofstat(list(fit_exp_italian_small, fit_gamma_italian_small), discrete = FALSE, 
+               fitnames = c("exponential","gamma"))
+gof_IG_small <- fit_gof_IG(small_italian_loss)
+n <- length(small_italian_loss)
+#### Parametric bootstrap
+n_loop <- 100
+gof_boot_small <- matrix(1, n_loop, 6)
+for(k in 1:n_loop){
+  exp_boot_small <- rexp(n, rate = 1 / scale_exp_italian_small )
+  gamma_boot_small <- rgamma(n, shape = shape_gamma_italian_small, scale = scale_gamma_italian_small)
+  invgauss_boot_small <- rinvgauss(n, mean = gof_IG_small$params$mean, dispersion = gof_IG_small$params$dispersion)
+  fit_exp_boot_small <- fitdist(exp_boot, dexp, method = c("mme"))
+  fit_gamma_boot_small <- fitdist(gamma_boot, dgamma, method = c("mme"))
+  gof_invgauss_boot_small <- fit_gof_IG(invgauss_boot_small)
+  gof_boot_exp_small <- gofstat(fit_exp_boot, discrete = FALSE, fitnames = c("exponential"))
+  gof_boot_gamma_small <- gofstat(fit_gamma_boot, discrete = FALSE, fitnames = c("gamma"))
+  gof_boot_small[k,] <-c(gof_boot_exp_small$ks, gof_boot_exp_small$cvm, gof_boot_gamma_small$ks , gof_boot_gamma_small$cvm, gof_invgauss_boot_small$KS, gof_invgauss_boot_small$CvM) 
+}
+gof_italian_small <- data.frame(model = c('exponential','gamma', 'invgauss'),
+                         AIC = c(gof_small$aic, gof_IG_small$AIC),
+                         ks = c(gof_small$ks, gof_IG_small$KS), 
+                         ks_critical = c(quantile(gof_boot_small[,1],0.95), quantile(gof_boot_small[,3],0.95), quantile(gof_boot_small[,5],0.95)),
+                         cvm = c(gof_small$cvm, gof_IG_small$CvM), 
+                         cvm_critical = c(quantile(gof_boot_small[,2],0.95), quantile(gof_boot_small[,4],0.95), quantile(gof_boot_small[,6],0.95))  
+)
+row.names(gof_italian_small) <- NULL
+gof_italian_small
+# print(xtable(gof_italian_small), 
+#       include.rownames = FALSE, include.colnames = TRUE)
+
+```
+The conclusion is that none of the models for the claim sizes lead to a good fit. We therefore expect the same conclusion when studying the aggregated data with our GOF techniques. Hereafter the data is processed so as to output the monthly aggregated data. 
+```{r, message = FALSE, warning  = FALSE, echo = FALSE}
+#_________________________________________________________________________________________________#
+#Aggregate claim analysis
+#_________________________________________________________________________________________________#
+# Preprocessing to collect claim sizes aggregated monthly
+itamtplcost <- data.frame(itamtplcost, mm_yy = substr(itamtplcost$Date,4,10), 
+                          yyyy = substr(itamtplcost$Date,7,10))
+itamtplcost_small <- itamtplcost_small[itamtplcost$UltimateCost < Hill_amse_italian$threshold,] 
+itamtplcost_small <- data.frame(itamtplcost_small, 
+                                        mm_yy = substr(itamtplcost_small$Date,4,10), 
+                                        yyyy = substr(itamtplcost_small$Date,7,10))
+
+date <- {}
+claim_frequency <- {}
+claim_frequency_small <- {}
+total_claim_size <- {}
+total_claim_size_small <- {}
+i <- 0
+for(y in 1997:2012){
+  for(m in 1:12){
+    i <- i +1
+    if(m < 10){
+      date[i] <- paste(0, m, "/", y, sep = '')
+      }
+    else{
+      date[i] <- paste(m, "/", y, sep = '')
+      }
+    claim_frequency[i] <- length(itamtplcost$mm_yy[paste(itamtplcost$mm_yy) == date[i]])
+    claim_frequency_small[i] <- length(itamtplcost_small$mm_yy[paste(itamtplcost_small$mm_yy) == date[i]])
+    if(claim_frequency[i] == 0){
+      total_claim_size[i] <- 0
+    }
+    else{
+      total_claim_size[i] <- sum(itamtplcost$UltimateCost[paste(itamtplcost$mm_yy) == date[i]])
+    }
+    if(claim_frequency_small[i] == 0){
+      total_claim_size_small[i] <- 0
+    }
+    else{
+      total_claim_size_small[i] <- sum(itamtplcost_small$UltimateCost[paste(itamtplcost_small$mm_yy) == date[i]])
+    }
+  }
+}
+itamtplcost_monthly <- data.frame(mm_yy = date, claim_frequency = claim_frequency, total_claim_size <- total_claim_size)
+itamtplcost_small_monthly <- data.frame(mm_yy = date, claim_frequency = claim_frequency_small, total_claim_size <- total_claim_size_small)
+### Output Table
+itamtplcost_monthly[1:5,]
+# print(xtable(itamtplcost_monthly[1:5,]), 
+#       include.rownames = FALSE,include.colnames = TRUE)
+```
+Now we turn to the study of the claim frequency distribution. We fit and assess the adequacy of the Poisson and geometric distribution to the claim count data. 
+```{r, message = FALSE, warning = FALSE, echo = FALSE}
+# Goodness of fit of the claim frequency distributions
+fpois <- fitdist(itamtplcost_monthly$claim_frequency, "pois")
+fgeom <- fitdist(itamtplcost_monthly$claim_frequency, "geom")
+fnbinom <- fitdist(itamtplcost_monthly$claim_frequency, "nbinom")
+fpois_small <- fitdist(itamtplcost_small_monthly$claim_frequency, "pois")
+fgeom_small <- fitdist(itamtplcost_small_monthly$claim_frequency, "geom")
+fnbinom_small <- fitdist(itamtplcost_small_monthly$claim_frequency, "nbinom")
+
+# gof_claim_frequency <- gofstat(list(fpois, fgeom, fnbinom) , discrete = TRUE, 
+#                                fitnames = c("Poisson","Geometric","Negative-Binomial"))
+# gof_claim_frequency_small <- gofstat(list(fpois_small, fgeom_small, fnbinom_small) , discrete = TRUE, 
+gof_claim_frequency <- gofstat(list(fpois, fgeom) , discrete = TRUE,
+                               fitnames = c("Poisson","Geometric"))
+gof_claim_frequency_small <- gofstat(list(fpois_small, fgeom_small) , discrete = TRUE,
+fitnames = c("Poisson","Geometric")) 
+
+### Output
+claim_count_summary <- data.frame(model = c("Poisson", "geometric", "Poisson", "geometric"),
+             estimated.parameters = c(fpois$estimate, fgeom$estimate, fpois_small$estimate, fgeom_small$estimate),
+             Chisq = c(gof_claim_frequency$chisq, gof_claim_frequency_small$chisq),
+             AIC = c(gof_claim_frequency$aic, gof_claim_frequency_small$aic)
+             )
+
+print(xtable(claim_count_summary
+  , include.rownames = FALSE,include.colnames = TRUE))
+claim_count_summary
+```
+The aggregated claim sizes data is fit using 6 different models including 
+
+- Poisson-exponential
+- Poisson-gamma
+- Poisson-inverse Gaussian
+- Geometric-exponential
+- Geometric-gamma
+- Geometric-inverse Gaussian
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE}
+# Inference of the compound distribution
+## Large claims
+geom_exp <- MME_CD(itamtplcost_monthly$total_claim_size, 'geom', 'exp', 'partial-MME')
+geom_gamma <- MME_CD(itamtplcost_monthly$total_claim_size, 'geom', 'gamma', 'partial-MME')
+geom_invgauss <- MME_CD(itamtplcost_monthly$total_claim_size, 'geom', 'invgauss', 'partial-MME')
+poisson_exp <- MME_CD(itamtplcost_monthly$total_claim_size, 'pois', 'exp', 'partial-MME')
+poisson_gamma <- MME_CD(itamtplcost_monthly$total_claim_size, 'pois', 'gamma', 'partial-MME')
+poisson_invgauss <- MME_CD(itamtplcost_monthly$total_claim_size, 'pois', 'invgauss', 'partial-MME')
+
+## Small claims
+geom_exp_small <- MME_CD(itamtplcost_small_monthly$total_claim_size, 'geom', 'exp', 'partial-MME')
+geom_gamma_small <- MME_CD(itamtplcost_small_monthly$total_claim_size, 'geom', 'gamma', 'partial-MME')
+geom_invgauss_small <- MME_CD(itamtplcost_small_monthly$total_claim_size, 'geom', 'invgauss', 'partial-MME')
+poisson_exp_small <- MME_CD(itamtplcost_small_monthly$total_claim_size, 'pois', 'exp', 'partial-MME')
+poisson_gamma_small <- MME_CD(itamtplcost_small_monthly$total_claim_size, 'pois', 'gamma', 'partial-MME')
+poisson_invgauss_small <- MME_CD(itamtplcost_small_monthly$total_claim_size, 'pois', 'invgauss', 'partial-MME')
+
+## Output Table 
+params_CD <- data.frame(model = c(rep("Poisson-exponential",2), rep("Poisson-gamma",3), rep("Poisson-invgauss", 3), 
+                       rep("geometric-exponential", 2)), 
+             parameters = c(poisson_exp[c(2, 4)], poisson_gamma[2:4], poisson_invgauss[2:4], geom_exp[c(1,4)]), 
+             parameter_small = c(poisson_exp_small[c(2, 4)], poisson_gamma_small[2:4], poisson_invgauss_small[2:4], 
+                                 geom_exp_small[c(1,4)])
+  )
+
+print(xtable(params_CD, include.rownames = FALSE,include.colnames = TRUE))
+params_CD
+```
+The method of moment results in negative values of the parameter within the geometric-gamma and geometric-inverse Gaussian that are therefore discarded in the remainder of this study. We now apply our goodness-of-fit procedure staring with distribution based ones on all the claims
+```{r, message = FALSE, echo = FALSE, warning = FALSE}
+#All claims
+B = 100
+## KS test 
+ks_geom_exp <- ks_gof(itamtplcost_monthly$total_claim_size, 'geom', 'exp', 35,
+                   'truncation', B, method = 'partial-MME')
+ks_pois_exp <- ks_gof(itamtplcost_monthly$total_claim_size, 'pois', 'exp', 35,
+                   'truncation', B, method = 'partial-MME')
+ks_pois_gamma <- ks_gof(itamtplcost_monthly$total_claim_size, 'pois', 'gamma', 35,
+                   'truncation', B, method = 'partial-MME')
+ks_pois_invgauss <- ks_gof(itamtplcost_monthly$total_claim_size, 'pois', 'invgauss', 35,
+                   'truncation', B, method = 'partial-MME')
+## CvM test
+cvm_geom_exp <- cvm_gof(itamtplcost_monthly$total_claim_size, 'geom', 'exp', 35,
+                   'truncation', B, method = 'partial-MME')
+cvm_pois_exp <- cvm_gof(itamtplcost_monthly$total_claim_size, 'pois', 'exp', 35,
+                   'truncation', B, method = 'partial-MME')
+cvm_pois_gamma <- cvm_gof(itamtplcost_monthly$total_claim_size, 'pois', 'gamma', 35,
+                   'truncation', B, method = 'partial-MME')
+cvm_pois_invgauss <- cvm_gof(itamtplcost_monthly$total_claim_size, 'pois', 'invgauss', 35,
+                   'truncation', B, method = 'partial-MME')
+df_test_all_claims <- data.frame(model = c('geometric-exp', 'poisson-exp', 'poisson-gamma', 'Poisson-inverse Gaussian'),
+             KS = c(ks_geom_exp[1], ks_pois_exp[1], ks_pois_gamma[1], ks_pois_invgauss[1]),
+             KS_critical =  c(ks_geom_exp[2], ks_pois_exp[2], ks_pois_gamma[2], ks_pois_invgauss[2]),
+             CvM = c(cvm_geom_exp[1], cvm_pois_exp[1], cvm_pois_gamma[1], cvm_pois_invgauss[1]),
+             CvM_critical = c(cvm_geom_exp[2], cvm_pois_exp[2], cvm_pois_gamma[2], cvm_pois_invgauss[2]))
+##Latex table
+# print(xtable(df_test_all_claims
+#   , digits= -2), 
+#   include.rownames = FALSE,include.colnames = TRUE)
+##output table
+df_test_all_claims
+```
+then on the small claims
+```{r, message = FALSE, warning = FALSE, echo = FALSE}
+#Small claims
+## KS test 
+ks_geom_exp_small <- ks_gof(itamtplcost_small_monthly$total_claim_size, 'geom', 'exp', 35,
+                   'truncation', B, method = 'partial-MME')
+ks_pois_exp_small <- ks_gof(itamtplcost_small_monthly$total_claim_size, 'pois', 'exp', 35,
+                   'truncation', B, method = 'partial-MME')
+ks_pois_gamma_small <- ks_gof(itamtplcost_small_monthly$total_claim_size, 'pois', 'gamma', 35,
+                   'truncation', B, method = 'partial-MME')
+ks_pois_invgauss_small <- ks_gof(itamtplcost_small_monthly$total_claim_size, 'pois', 'invgauss', 35,
+                   'truncation', B, method = 'partial-MME')
+## CvM test
+cvm_geom_exp_small <- cvm_gof(itamtplcost_small_monthly$total_claim_size, 'geom', 'exp', 35,
+                   'truncation', B, method = 'partial-MME')
+cvm_pois_exp_small <- cvm_gof(itamtplcost_small_monthly$total_claim_size, 'pois', 'exp', 35,
+                   'truncation', B, method = 'partial-MME')
+cvm_pois_gamma_small <- cvm_gof(itamtplcost_small_monthly$total_claim_size, 'pois', 'gamma', 35,
+                   'truncation', B, method = 'partial-MME')
+cvm_pois_invgauss_small <- cvm_gof(itamtplcost_small_monthly$total_claim_size, 'pois', 'invgauss', 35,
+                   'truncation', B, method = 'partial-MME')
+df_test_small_claims <- data.frame(model = c('geometric-exp', 'poisson-exp', 'poisson-gamma', 'Poisson-inverse Gaussian'),
+             KS = c(ks_geom_exp_small[1], ks_pois_exp_small[1], ks_pois_gamma_small[1], ks_pois_invgauss_small[1]),
+             KS_critical =  c(ks_geom_exp_small[2], ks_pois_exp_small[2], ks_pois_gamma_small[2], ks_pois_invgauss_small[2]),
+             CvM = c(cvm_geom_exp_small[1], cvm_pois_exp_small[1], cvm_pois_gamma_small[1], cvm_pois_invgauss_small[1]),
+             CvM_critical = c(cvm_geom_exp_small[2], cvm_pois_exp_small[2], cvm_pois_gamma_small[2], cvm_pois_invgauss_small[2]))
+##Latex table
+# print(xtable(df_test_small_claims
+#   , digits= -2), 
+#   include.rownames = FALSE,include.colnames = TRUE)
+##output table
+df_test_small_claims
+```
+We turn to the Laplace transform based techniques using the $\text{SE}_n(t)$ distance on all the claims
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE}
+#L2 distance
+beta_vec <- c(10^(-3), 10^(-2))
+B = 100
+## All Claims
+L2_geom_exp <- sapply(beta_vec, function(beta) lt_L2_gof(itamtplcost_monthly$total_claim_size, 'geom', 'exp', beta, B, method = 'partial-MME', T))
+L2_poisson_exp <- sapply(beta_vec, function(beta) lt_L2_gof(itamtplcost_monthly$total_claim_size, 'pois', 'exp', beta, B, method = 'partial-MME', T))
+L2_poisson_gamma <- sapply(beta_vec, function(beta) lt_L2_gof(itamtplcost_monthly$total_claim_size, 'pois', 'gamma', beta, B, method = 'partial-MME', T))
+L2_poisson_invgauss <- sapply(beta_vec, function(beta) lt_L2_gof(itamtplcost_monthly$total_claim_size, 'pois', 'invgauss', beta, B, method = 'partial-MME', T))
+
+lt_L2_test_all_claims <- data.frame(model = c('geometric-exp', 'poisson-exp', 'poisson-gamma', 'Poisson-inverse Gaussian'),
+             beta_3 = c(L2_geom_exp[1, 1], L2_poisson_exp[1, 1], L2_poisson_gamma[1, 1], L2_poisson_invgauss[1, 1]),
+             beta_3_critical =  c(L2_geom_exp[2, 1], L2_poisson_exp[2, 1], L2_poisson_gamma[2, 1], L2_poisson_invgauss[2, 1]),
+             beta_2 = c(L2_geom_exp[1, 2], L2_poisson_exp[1, 2], L2_poisson_gamma[1, 2], L2_poisson_invgauss[1, 2]),
+             beta_2_critical =  c(L2_geom_exp[2, 2], L2_poisson_exp[2, 2], L2_poisson_gamma[2, 2], L2_poisson_invgauss[2, 2]))
+##Latex table
+# print(xtable(lt_L2_test_all_claims
+#   , digits= -2), 
+#   include.rownames = FALSE, include.colnames = TRUE)
+##output table
+lt_L2_test_all_claims
+```
+
+and small claims
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE, eval = FALSE}
+## Small Claims
+L2_geom_exp_small <- sapply(beta_vec, function(beta) lt_L2_gof(itamtplcost_small_monthly$total_claim_size, 'geom', 'exp', beta, B, method = 'partial-MME', T))
+L2_poisson_exp_small <- sapply(beta_vec, function(beta) lt_L2_gof(itamtplcost_small_monthly$total_claim_size, 'pois', 'exp', beta, B, method = 'partial-MME', T))
+L2_poisson_gamma_small <- sapply(beta_vec, function(beta) lt_L2_gof(itamtplcost_small_monthly$total_claim_size, 'pois', 'gamma', beta, B, method = 'partial-MME', T))
+L2_poisson_invgauss_small <- sapply(beta_vec, function(beta) lt_L2_gof(itamtplcost_small_monthly$total_claim_size, 'pois', 'invgauss', beta, B, method = 'partial-MME', T))
+
+lt_L2_test_small_claims <- data.frame(model = c('geometric-exp', 'poisson-exp', 'poisson-gamma', 'Poisson-inverse Gaussian'),
+             beta_3 = c(L2_geom_exp_small[1, 1], L2_poisson_exp_small[1, 1], L2_poisson_gamma_small[1, 1], L2_poisson_invgauss_small[1, 1]),
+             beta_3_critical =  c(L2_geom_exp_small[2, 1], L2_poisson_exp_small[2, 1], L2_poisson_gamma_small[2, 1], L2_poisson_invgauss_small[2, 1]),
+             beta_2 = c(L2_geom_exp_small[1, 2], L2_poisson_exp_small[1, 2], L2_poisson_gamma_small[1, 2], L2_poisson_invgauss_small[1, 2]),
+             beta_2_critical =  c(L2_geom_exp_small[2, 2], L2_poisson_exp_small[2, 2], L2_poisson_gamma_small[2, 2], L2_poisson_invgauss_small[2, 2]))
+##Latex table
+# print(xtable(lt_L2_test_small_claims
+#   , digits= -2), 
+#   include.rownames = FALSE,include.colnames = TRUE)
+##output table
+lt_L2_test_small_claims
+```
+
+Finally the Laplace transform based techniques using the $\text{DE}_n(t)$ distance on all the claims 
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE}
+#ODE distance
+beta_vec <- c(10^(-1), 1)
+B = 100
+## All Claims
+ODE_geom_exp <- sapply(beta_vec, function(beta) lt_ODE_gof(itamtplcost_monthly$total_claim_size, 'geom', 'exp', beta, B, method = 'partial-MME', T))
+ODE_poisson_exp <- sapply(beta_vec, function(beta) lt_ODE_gof(itamtplcost_monthly$total_claim_size, 'pois', 'exp', beta, B, method = 'partial-MME', T))
+ODE_poisson_gamma <- sapply(beta_vec, function(beta) lt_ODE_gof(itamtplcost_monthly$total_claim_size, 'pois', 'gamma', beta, B, method = 'partial-MME', T))
+ODE_poisson_invgauss <- sapply(beta_vec, function(beta) lt_ODE_gof(itamtplcost_monthly$total_claim_size, 'pois', 'invgauss', beta, B, method = 'partial-MME', T))
+
+lt_ODE_test_all_claims <- data.frame(model = c('geometric-exp', 'poisson-exp', 'poisson-gamma', 'Poisson-inverse Gaussian'),
+             beta_0.1 = c(ODE_geom_exp[1, 1], ODE_poisson_exp[1, 1], ODE_poisson_gamma[1, 1], ODE_poisson_invgauss[1, 1]),
+             beta_0.1_critical =  c(ODE_geom_exp[2, 1], ODE_poisson_exp[2, 1], ODE_poisson_gamma[2, 1], ODE_poisson_invgauss[2, 1]),
+             beta_1 = c(ODE_geom_exp[1, 2], ODE_poisson_exp[1, 2], ODE_poisson_gamma[1, 2], ODE_poisson_invgauss[1, 2]),
+             beta_1_critical =  c(ODE_geom_exp[2, 2], ODE_poisson_exp[2, 2], ODE_poisson_gamma[2, 2], ODE_poisson_invgauss[2, 2]))
+##Latex table
+# print(xtable(lt_ODE_test_all_claims
+#   , digits= -2), 
+#   include.rownames = FALSE,include.colnames = TRUE)
+##output table
+lt_ODE_test_all_claims
+```
+and on the small claims
+```{r, message = FALSE, warning = FALSE,echo = FALSE}
+## Small Claims
+ODE_geom_exp_small <- sapply(beta_vec, function(beta) lt_ODE_gof(itamtplcost_small_monthly$total_claim_size, 'geom', 'exp', beta, B, method = 'partial-MME', T))
+ODE_poisson_exp_small <- sapply(beta_vec, function(beta) lt_ODE_gof(itamtplcost_small_monthly$total_claim_size, 'pois', 'exp', beta, B, method = 'partial-MME', T))
+ODE_poisson_gamma_small <- sapply(beta_vec, function(beta) lt_ODE_gof(itamtplcost_small_monthly$total_claim_size, 'pois', 'gamma', beta, B, method = 'partial-MME', T))
+ODE_poisson_invgauss_small <- sapply(beta_vec, function(beta) lt_ODE_gof(itamtplcost_small_monthly$total_claim_size, 'pois', 'invgauss', beta, B, method = 'partial-MME', T))
+
+lt_ODE_test_small_claims <- data.frame(model = c('geometric-exp', 'poisson-exp', 'poisson-gamma', 'Poisson-inverse Gaussian'),
+             beta_0.1 = c(ODE_geom_exp_small[1, 1], ODE_poisson_exp_small[1, 1], ODE_poisson_gamma_small[1, 1], ODE_poisson_invgauss_small[1, 1]),
+             beta_0.1_critical =  c(ODE_geom_exp_small[2, 1], ODE_poisson_exp_small[2, 1], ODE_poisson_gamma_small[2, 1], ODE_poisson_invgauss_small[2, 1]),
+             beta_1 = c(ODE_geom_exp_small[1, 2], ODE_poisson_exp_small[1, 2], ODE_poisson_gamma_small[1, 2], ODE_poisson_invgauss_small[1, 2]),
+             beta_1_critical =  c(ODE_geom_exp_small[2, 2], ODE_poisson_exp_small[2, 2], ODE_poisson_gamma_small[2, 2], ODE_poisson_invgauss_small[2, 2]))
+##Latex table
+# print(xtable(lt_ODE_test_small_claims
+#   , digits= -2), 
+#   include.rownames = FALSE,include.colnames = TRUE)
+##output table
+lt_ODE_test_small_claims
+
+```
+

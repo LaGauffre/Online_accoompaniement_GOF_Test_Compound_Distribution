@@ -1,0 +1,71 @@
+---
+title: "Comparison of the GOF procedures when the claim sizes differ"
+output: html_notebook
+---
+  
+  This notebooks presents the results of a Monte Carlo experience to compare the performance of the GOF test. We are testing three aggreagted claim amounts model: 
+  
+  - Poisson - exponential 
+- Poisson - gamma
+- Poisson - inverse Gaussian
+
+We compare the CDF based goodness-of-fiot procedures to the Laplace transform based one. When using the SE distance, beta belongs to $\{10^{-3}, 10^{-2}\}$, while when the ODE distance is used then $\beta \in\{10^{-1}, 1\}$. The inference technique is always *partial-MME*.
+```{r, echo = FALSE, eval = TRUE}
+#Useful libraries
+library(tidyverse)
+library(ggplot2)
+library(FTCD)
+library(rmarkdown)
+library(knitr)
+library(latex2exp)
+#Importation of the simulation data
+Comparison_power_claim_frequency <- read.csv("C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Simulation_DATA/Comparison_power_Claim_Frequency.txt")
+```
+We test samples coming from a $zmPois(p ,\lambda = 1)-exp(\theta = 1)$ and $mPois(p ,\lambda = 1)-exp(\theta = 1)$ models with $p = 0.1,\ldots,0.9$ and measure the adequacy of a Poisson-exponnential model. 
+```{r, echo = FALSE}
+font_size_graph <- 16
+# Poisson exponential under H0
+power_plot_zmpois_exp <- ggplot(data = Comparison_power_claim_frequency %>% filter(N_H0 == "pois" & N_alt == 'zmpois' & method_inference == 'MME') %>% mutate(var_qual = paste(method_GOF, '&', beta)), mapping = aes(x = param_N, y = power, linetype = var_qual, colour = var_qual)) + geom_point() + geom_line() + theme_bw() + ggtitle("zero-modified Poisson") +
+  xlab(TeX('$p_0$')) + ylab('p-value') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "bottom") 
+power_plot_zmpois_exp
+
+power_plot_mpois_exp <- ggplot(data = Comparison_power_claim_frequency %>% filter(N_H0 == "pois" & N_alt == 'mpois' & method_inference == 'partial-MME') %>% mutate(var_qual = paste(method_GOF, '&', beta)), mapping = aes(x = param_N, y = power, linetype = var_qual, colour = var_qual)) + geom_point() + geom_line() + theme_bw() + ggtitle('mixed Poisson') +
+  xlab(TeX('p')) + ylab('p-value') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "bottom") 
+power_plot_mpois_exp
+```
+```{r, include = FALSE, eval = FALSE, message = FALSE, echo = FALSE}
+#This code provides the plots displayed in the paper
+#Samples from zero-modified Poisson and Poisson exponential under H0
+power_plot_zmpois_exp <- ggplot(data = Comparison_power_claim_frequency %>% filter(N_H0 == "pois" & N_alt == 'zmpois' & method_inference == 'MME') %>% mutate(var_qual = paste(method_GOF, '&', beta)), mapping = aes(x = param_N, y = power, linetype = var_qual)) + geom_point() + geom_line() + theme_bw() + 
+  xlab(TeX('$p_0$')) + ylab('probability of rejection') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "none") 
+power_plot_zmpois_exp
+ggsave("C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Pictures/power_plot_zmpois_exp.pdf", plot = power_plot_zmpois_exp)
+
+#Samples from mixed Poisson and Poisson exponential under H0
+power_plot_mpois_exp <- ggplot(data = Comparison_power_claim_frequency %>% filter(N_H0 == "pois" & N_alt == 'mpois' & method_inference == 'MME') %>% mutate(var_qual = paste(method_GOF, '&', beta)), mapping = aes(x = param_N, y = power, linetype = var_qual)) + geom_point() + geom_line() + theme_bw() + 
+  xlab(TeX('$p_0$')) + ylab('probability of rejection') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "none") 
+power_plot_mpois_exp
+ggsave("C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Pictures/power_plot_mpois_exp.pdf", plot = power_plot_mpois_exp)
+
+```
+

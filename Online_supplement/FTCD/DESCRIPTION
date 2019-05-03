@@ -1,0 +1,12 @@
+Package: FTCD
+Title: Fit and test the adequacy of a compound model to the data
+Version: 0.0.0.9000
+Authors@R: person("Pierre-O", "Goffard", email = "pierre.olivier.goffard@gmail.com", role = c("aut", "cre"))
+Description: Fit and test the adequacy of a Compound model to the data.
+Depends: R (>= 3.4.2)
+License: What license is it under?
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 6.1.1
+Imports: actuar, fitdistrplus, moments, expint, Rcpp, tidyverse
+LinkingTo: Rcpp

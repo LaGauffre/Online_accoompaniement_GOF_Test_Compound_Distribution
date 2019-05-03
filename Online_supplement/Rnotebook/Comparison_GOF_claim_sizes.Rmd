@@ -1,0 +1,298 @@
+---
+title: "Comparison of the GOF procedures when the claim sizes differ"
+author: Pierre-O Goffard
+output: html_notebook
+---
+
+This notebooks presents the results of a Monte Carlo experience to compare the performance of the GOF test. We are testing three aggregated claim amounts model: 
+
+ - Poisson - exponential 
+ - Poisson - gamma
+ - Poisson - inverse Gaussian
+
+We compare the CDF based goodness-of-fiot procedures to the Laplace transform based one. When using the SE distance, beta belongs to $\{10^{-3}, 10^{-2}\}$, while when the ODE distance is used then $\beta \in\{10^{-1}, 1\}$. The inference technique is always *partial-MME*.
+```{r, echo = FALSE, eval = TRUE, message = FALSE}
+#Useful libraries
+library(tidyverse)
+library(ggplot2)
+library(FTCD)
+library(rmarkdown)
+library(knitr)
+library(latex2exp)
+#Importation of the simulation data
+Comparison_power <- read.csv("C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Simulation_DATA/Comparison_power_claim_sizes.txt")
+Comparison_power_V1 <- Comparison_power %>% filter( ((beta == 10^(-2) | beta == 10^(-3)) & method_GOF == 'LT_L2')| ((beta == 10^(-1) | beta == 1) & method_GOF == 'LT_ODE') | beta == 35)  %>% mutate(var_qual = paste(method_GOF,'&',beta))
+```
+Test 1: We test samples coming from a $Poison(\lambda = 1)-gamma(r,\theta = 1)$ model with $r= 0.2,0.4,\ldots,2.$
+```{r, echo = FALSE}
+font_size_graph <- 16
+# Poisson exponential under H0
+power_plot_gamma_exp <- ggplot2::ggplot(data = Comparison_power_V1 %>% filter(U_alt == "gamma" & U_H0 == 'exp'), mapping = aes(x = shape_U, y = power, linetype = var_qual, colour = var_qual)) + geom_point() + geom_line() + theme_bw() + ggtitle("H0: Poisson-exponential") +
+   xlab(TeX('shape parameter')) + ylab('p-value') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "bottom") 
+power_plot_gamma_exp
+
+# Poisson gamma under H0
+power_plot_gamma_gamma <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "gamma" & U_H0 == 'gamma'), mapping = aes(x = shape_U, y = power, linetype = var_qual, colour = var_qual)) + geom_point() + geom_line() + theme_bw() + ggtitle("H0: Poisson-gamma") +
+   xlab(TeX('shape parameter')) + ylab('p-value') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "bottom") 
+power_plot_gamma_gamma
+
+# Poisson inverse Gaussian under H0
+power_plot_gamma_invgauss <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "gamma" & U_H0 == 'invgauss'), mapping = aes(x = shape_U, y = power, linetype = var_qual, colour = var_qual)) + geom_point() + geom_line() + theme_bw() + ggtitle("H0: Poisson-inverse Gaussian") +
+   xlab(TeX('shape parameter')) + ylab('p-value') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "bottom") 
+power_plot_gamma_invgauss
+
+```
+```{r, include = FALSE, eval = FALSE, message = FALSE, echo = FALSE}
+# Poisson exponential under H0
+power_plot_gamma_exp <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "gamma" & U_H0 == 'exp'), mapping = aes(x = shape_U, y = power, linetype = var_qual)) + geom_point() + geom_line() + theme_bw() + 
+   xlab(TeX('shape parameter')) + ylab('probability of rejection') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "none") 
+power_plot_gamma_exp
+ggsave("C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Pictures/power_plot_gamma_exp.pdf", plot = power_plot_gamma_exp)
+
+# Poisson gamma under H0
+power_plot_gamma_gamma <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "gamma" & U_H0 == 'gamma'), mapping = aes(x = shape_U, y = power, linetype = var_qual)) + geom_point() + geom_line() + theme_bw() + 
+   xlab(TeX('shape parameter')) + ylab('probability of rejection') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "none") 
+power_plot_gamma_gamma
+ggsave("C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Pictures/power_plot_gamma_gamma.pdf", plot = power_plot_gamma_gamma)
+
+
+# Poisson inverse Gaussian under H0
+power_plot_gamma_invgauss <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "gamma" & U_H0 == 'invgauss'), mapping = aes(x = shape_U, y = power, linetype = var_qual)) + geom_point() + geom_line() + theme_bw() + 
+   xlab(TeX('shape parameter')) + ylab('probability of rejection') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "none") 
+power_plot_gamma_invgauss
+ggsave("C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Pictures/power_plot_gamma_invgauss.pdf", plot = power_plot_gamma_invgauss)
+
+```
+
+Test 2: We test samples coming from a $Poisson(\lambda = 1) - inverse Gaussian(\mu,\phi=1)$ model with $\mu = 0.2,0.4, \ldots, 2$ 
+```{r, echo = FALSE}
+# Poisson exponential under H0
+power_plot_invgauss_exp <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "invgauss" & U_H0 == 'exp'), mapping = aes(x = shape_U, y = power, linetype = var_qual, colour = var_qual)) + geom_point() + geom_line() + theme_bw() + ggtitle("H0: Poisson-exponential") +
+   xlab(TeX('shape parameter')) + ylab('p-value') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "bottom") 
+power_plot_invgauss_exp
+
+# Poisson gamma under H0
+power_plot_invgauss_gamma <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "invgauss" & U_H0 == 'gamma'), mapping = aes(x = shape_U, y = power, linetype = var_qual, colour = var_qual)) + geom_point() + geom_line() + theme_bw() + ggtitle("H0: Poisson-gamma") +
+   xlab(TeX('shape parameter')) + ylab('p-value') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "bottom") 
+power_plot_invgauss_gamma
+
+# Poisson inverse Gaussian under H0
+power_plot_invgauss_invgauss <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "invgauss" & U_H0 == 'invgauss'), mapping = aes(x = shape_U, y = power, linetype = var_qual, colour = var_qual)) + geom_point() + geom_line() + theme_bw() + ggtitle("H0: Poisson-inverse Gaussian") +
+   xlab(TeX('shape parameter')) + ylab('p-value') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "bottom") 
+power_plot_invgauss_invgauss
+```
+
+```{r, include = FALSE, eval = FALSE, message = FALSE, echo = FALSE}
+# Poisson exponential under H0
+power_plot_invgauss_exp <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "invgauss" & U_H0 == 'exp'), mapping = aes(x = shape_U, y = power, linetype = var_qual)) + geom_point() + geom_line() + theme_bw() + 
+   xlab(TeX('shape parameter')) + ylab('p-value') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "none") 
+power_plot_invgauss_exp
+ggsave("C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Pictures/power_plot_invgauss_exp.pdf", plot = power_plot_invgauss_exp)
+
+# Poisson gamma under H0
+power_plot_invgauss_gamma <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "invgauss" & U_H0 == 'gamma'), mapping = aes(x = shape_U, y = power, linetype = var_qual)) + geom_point() + geom_line() + theme_bw() + 
+   xlab(TeX('shape parameter')) + ylab('p-value') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "none") 
+power_plot_invgauss_gamma
+ggsave("C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Pictures/power_plot_invgauss_gamma.pdf", plot = power_plot_invgauss_gamma)
+
+
+# Poisson inverse Gaussian under H0
+power_plot_invgauss_invgauss <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "invgauss" & U_H0 == 'invgauss'), mapping = aes(x = shape_U, y = power, linetype = var_qual)) + geom_point() + geom_line() + theme_bw() + 
+   xlab(TeX('shape parameter')) + ylab('p-value') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "none") 
+power_plot_invgauss_invgauss
+ggsave("C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Pictures/power_plot_invgauss_invgauss.pdf", plot = power_plot_invgauss_invgauss)
+```
+
+Test 3: We test samples from a $Poisson(\lambda = 1)-Weibull(\alpha, \beta = 1)$ model with $\alpha = 0.2, 0.4,\ldots,2$.
+```{r, echo = FALSE}
+power_plot_weibull_exp <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "weibull" & U_H0 == 'exp'), mapping = aes(x = shape_U, y = power, linetype = var_qual, colour = var_qual)) + geom_point() + geom_line() + theme_bw() + ggtitle("H0: Poisson-exponential") +
+   xlab(TeX('shape parameter')) + ylab('p-value') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "bottom") 
+power_plot_weibull_exp
+
+# Poisson gamma under H0
+power_plot_weibull_gamma <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "weibull" & U_H0 == 'gamma'), mapping = aes(x = shape_U, y = power, linetype = var_qual, colour = var_qual)) + geom_point() + geom_line() + theme_bw() + ggtitle("H0: Poisson-gamma") +
+   xlab(TeX('shape parameter')) + ylab('p-value') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "bottom") 
+power_plot_weibull_gamma
+
+# Poisson inverse Gaussian under H0
+power_plot_weibull_invgauss <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "weibull" & U_H0 == 'invgauss'), mapping = aes(x = shape_U, y = power, linetype = var_qual, colour = var_qual)) + geom_point() + geom_line() + theme_bw() + ggtitle("H0: Poisson-inverse Gaussian") +
+   xlab(TeX('shape parameter')) + ylab('p-value') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "bottom") 
+power_plot_weibull_invgauss
+```
+
+```{r, message = FALSE, echo = FALSE, include = FALSE, eval = FALSE}
+#These are the plots displayed in the paper
+power_plot_weibull_exp <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "weibull" & U_H0 == 'exp'), mapping = aes(x = shape_U, y = power, linetype = var_qual)) + geom_point() + geom_line() + theme_bw() + 
+   xlab(TeX('shape parameter')) + ylab('probability of rejection') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "none") 
+power_plot_weibull_exp
+ggsave("C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Pictures/power_plot_weibull_exp.pdf", plot = power_plot_weibull_exp)
+
+
+# Poisson gamma under H0
+power_plot_weibull_gamma <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "weibull" & U_H0 == 'gamma'), mapping = aes(x = shape_U, y = power, linetype = var_qual)) + geom_point() + geom_line() + theme_bw() + 
+   xlab(TeX('shape parameter')) + ylab('probability of rejection') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "none") 
+power_plot_weibull_gamma
+ggsave("C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Pictures/power_plot_weibull_gamma.pdf", plot = power_plot_weibull_gamma)
+
+# Poisson inverse Gaussian under H0
+power_plot_weibull_invgauss <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "weibull" & U_H0 == 'invgauss'), mapping = aes(x = shape_U, y = power, linetype = var_qual)) + geom_point() + geom_line() + theme_bw() + 
+   xlab(TeX('shape parameter')) + ylab('probability of rejection') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "none") 
+power_plot_weibull_invgauss
+ggsave("C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Pictures/power_plot_weibull_invgauss.pdf", plot = power_plot_weibull_invgauss)
+```
+
+Test 4: We test samples from a $Poisson(\lambda = 1)-lognormal(\mu = 0,\sigma)$ model with $\sigma = 0.2,0.4,\ldots, 2.$
+```{r, echo = FALSE}
+power_plot_lnorm_exp <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "lnorm" & U_H0 == 'exp'), mapping = aes(x = shape_U, y = power, linetype = var_qual, colour = var_qual)) + geom_point() + geom_line() + theme_bw() + ggtitle("H0: Poisson-exponential") +
+   xlab(TeX('shape parameter')) + ylab('p-value') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "bottom") 
+power_plot_lnorm_exp
+
+# Poisson gamma under H0
+power_plot_lnorm_gamma <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "lnorm" & U_H0 == 'gamma'), mapping = aes(x = shape_U, y = power, linetype = var_qual, colour = var_qual)) + geom_point() + geom_line() + theme_bw() + ggtitle("H0: Poisson-gamma") +
+   xlab(TeX('shape parameter')) + ylab('p-value') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "bottom") 
+power_plot_lnorm_gamma
+
+# Poisson inverse Gaussian under H0
+power_plot_lnorm_invgauss <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "lnorm" & U_H0 == 'invgauss'), mapping = aes(x = shape_U, y = power, linetype = var_qual, colour = var_qual)) + geom_point() + geom_line() + theme_bw() + ggtitle("H0: Poisson-inverse Gaussian") +
+   xlab(TeX('shape parameter')) + ylab('p-value') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "bottom") 
+power_plot_lnorm_invgauss
+```
+
+```{r, include = FALSE, eval = FALSE, message = FALSE, echo = FALSE}
+power_plot_lnorm_exp <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "lnorm" & U_H0 == 'exp'), mapping = aes(x = shape_U, y = power, linetype = var_qual)) + geom_point() + geom_line() + theme_bw() + 
+   xlab(TeX('shape parameter')) + ylab('p-value') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "none") 
+power_plot_lnorm_exp
+ggsave("C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Pictures/power_plot_lnorm_exp.pdf", plot = power_plot_lnorm_exp)
+
+# Poisson gamma under H0
+power_plot_lnorm_gamma <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "lnorm" & U_H0 == 'gamma'), mapping = aes(x = shape_U, y = power, linetype = var_qual)) + geom_point() + geom_line() + theme_bw() + 
+   xlab(TeX('shape parameter')) + ylab('p-value') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "none") 
+power_plot_lnorm_gamma
+ggsave("C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Pictures/power_plot_lnorm_gamma.pdf", plot = power_plot_lnorm_gamma)
+
+# Poisson inverse Gaussian under H0
+power_plot_lnorm_invgauss <- ggplot(data = Comparison_power_V1 %>% filter(U_alt == "lnorm" & U_H0 == 'invgauss'), mapping = aes(x = shape_U, y = power, linetype = var_qual)) + geom_point() + geom_line() + theme_bw() + 
+   xlab(TeX('shape parameter')) + ylab('p-value') + scale_linetype_manual(values=c('dotted','dashed','solid', 'dotdash', 'twodash', 'longdash')) +
+  theme(axis.title = element_text(size = font_size_graph),
+        axis.text = element_text(size = font_size_graph),
+        legend.text = element_text(size = font_size_graph),
+        legend.title = element_text(size = font_size_graph),
+        legend.position = "none") 
+power_plot_lnorm_invgauss
+ggsave("C:/Users/pierr/Dropbox/Goffard-Jammalamadaka-Meintanis/Pictures/power_plot_lnorm_invgauss.pdf", plot = power_plot_lnorm_invgauss)
+```
